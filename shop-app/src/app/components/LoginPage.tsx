@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import svgPaths from "../../imports/登录-1/svg-npjvcnzfsq";
 
-// API 基础地址
-const API_BASE_URL = 'http://localhost:3000';
+// API 基础地址（生产环境通过 Nginx 代理，本地开发用 localhost:3000）
+const API_BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
 
 function InputBox({ value, placeholder, isFocused }: { value: string; placeholder: string; isFocused: boolean }) {
   return (
