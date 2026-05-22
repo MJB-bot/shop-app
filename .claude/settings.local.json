@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(git *)",
-      "Bash(iconv -f UTF-16LE -t UTF-8 README.md)"
+      "Bash(iconv -f UTF-16LE -t UTF-8 README.md)",
+      "Bash(tar -czf nodejs-sc.tar.gz --exclude=node_modules nodejs-sc/)",
+      "Bash(scp *)",
+      "Bash(ssh *)"
     ]
   }
 }
