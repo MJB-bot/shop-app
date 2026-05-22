@@ -81,6 +81,7 @@ jobs:
                   JWT_SECRET: '${{ secrets.JWT_SECRET }}',
                   REFRESH_TOKEN_SECRET: '${{ secrets.REFRESH_TOKEN_SECRET }}',
                 },
+                exec_mode: 'fork',
                 instances: 1,
                 autorestart: true,
                 max_memory_restart: '200M',
