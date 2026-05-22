@@ -1,0 +1,107 @@
+name: Deploy to Alibaba Cloud ECS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: latest
+
+      - name: Build frontend
+        run: |
+          cd shop-app
+          pnpm install
+          pnpm build
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p deploy-package/shop-app
+          cp -r shop-app/dist deploy-package/shop-app/
+          cp -r nodejs-sc deploy-package/
+          rm -rf deploy-package/nodejs-sc/node_modules
+          cd deploy-package
+          tar -czf ../deploy.tar.gz .
+
+      - name: Copy files to ECS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.ECS_HOST }}
+          username: ${{ secrets.ECS_USERNAME }}
+          key: ${{ secrets.ECS_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.ECS_PORT || '22' }}
+          source: "deploy.tar.gz"
+          target: "/tmp/"
+
+      - name: Deploy on ECS
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.ECS_HOST }}
+          username: ${{ secrets.ECS_USERNAME }}
+          key: ${{ secrets.ECS_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.ECS_PORT || '22' }}
+          script: |
+            # 解压部署包
+            mkdir -p /var/www/shop-app /var/www/nodejs-sc
+            rm -rf /var/www/shop-app/dist
+            tar -xzf /tmp/deploy.tar.gz -C /var/www/
+
+            # 安装后端依赖
+            cd /var/www/nodejs-sc
+            npm install --production
+
+            # 动态写入 PM2 配置（注入环境变量）
+            cat > /var/www/nodejs-sc/ecosystem.config.js << EOF
+            module.exports = {
+              apps: [{
+                name: 'shop-api',
+                script: './bin/www',
+                cwd: '/var/www/nodejs-sc',
+                env: {
+                  NODE_ENV: 'production',
+                  PORT: 3000,
+                  DB_NAME: '${{ secrets.DB_NAME || 'db2504' }}',
+                  DB_USER: '${{ secrets.DB_USER || 'root' }}',
+                  DB_PASSWORD: '${{ secrets.DB_PASSWORD }}',
+                  DB_HOST: '${{ secrets.DB_HOST || 'localhost' }}',
+                  DB_PORT: '${{ secrets.DB_PORT || '3306' }}',
+                  JWT_SECRET: '${{ secrets.JWT_SECRET }}',
+                  REFRESH_TOKEN_SECRET: '${{ secrets.REFRESH_TOKEN_SECRET }}',
+                },
+                instances: 1,
+                autorestart: true,
+                max_memory_restart: '200M',
+                error_file: '/var/log/shop-api-error.log',
+                out_file: '/var/log/shop-api-out.log',
+                merge_logs: true,
+              }]
+            };
+            EOF
+
+            # PM2 启动/重启
+            if ! command -v pm2 &> /dev/null; then
+              npm install -g pm2
+            fi
+            pm2 restart /var/www/nodejs-sc/ecosystem.config.js 2>/dev/null || pm2 start /var/www/nodejs-sc/ecosystem.config.js
+            pm2 save
+
+            # 重载 Nginx
+            if command -v nginx &> /dev/null; then
+              nginx -t && nginx -s reload
+            fi
+
+            # 清理
+            rm -f /tmp/deploy.tar.gz
