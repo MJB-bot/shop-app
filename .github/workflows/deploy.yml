@@ -72,7 +72,7 @@ jobs:
                 cwd: '/var/www/nodejs-sc',
                 env: {
                   NODE_ENV: 'production',
-                  PORT: 3000,
+                  PORT: 3001,
                   DB_NAME: '${{ secrets.DB_NAME || 'db2504' }}',
                   DB_USER: '${{ secrets.DB_USER || 'root' }}',
                   DB_PASSWORD: '${{ secrets.DB_PASSWORD }}',
